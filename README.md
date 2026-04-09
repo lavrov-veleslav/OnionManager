@@ -55,7 +55,7 @@ If you want to build the executable (EXE) from source code yourself:
 2. In the root folder of the project, double-click the `build.bat` file to run it.
 3. The finished EXE file will appear in the `dist` folder.
 
-## 📦 Загрузка готовой версии / Download pre-built release
+## 📦 Загрузка готовой версии / Download built release
 
 **Русский:**  
 Готовая исполняемая версия (EXE-файл) доступна в разделе [Releases](https://github.com/lavrov-veleslav/OnionManager/releases).  
