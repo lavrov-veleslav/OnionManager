@@ -54,3 +54,13 @@ If you want to build the executable (EXE) from source code yourself:
 1. Make sure you have Python and all dependencies installed (`pip install -r requirements.txt`).
 2. In the root folder of the project, double-click the `build.bat` file to run it.
 3. The finished EXE file will appear in the `dist` folder.
+
+## 📦 Загрузка готовой версии / Download pre-built release
+
+**Русский:**  
+Готовая исполняемая версия (EXE-файл) доступна в разделе [Releases](https://github.com/lavrov-veleslav/OnionManager/releases).  
+Последняя стабильная версия: [v1.0.0](https://github.com/lavrov-veleslav/OnionManager/releases/tag/v1.0.0)
+
+**English:**  
+The pre-built executable (EXE) is available in the [Releases](https://github.com/lavrov-veleslav/OnionManager/releases) section.  
+Latest stable release: [v1.0.0](https://github.com/lavrov-veleslav/OnionManager/releases/tag/v1.0.0)
