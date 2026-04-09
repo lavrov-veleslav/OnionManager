@@ -54,7 +54,27 @@ If you want to build the executable (EXE) from source code yourself:
 1. Make sure you have Python and all dependencies installed (`pip install -r requirements.txt`).
 2. In the root folder of the project, double-click the `build.bat` file to run it.
 3. The finished EXE file will appear in the `dist` folder.
+## 🔗 Где взять Tor / Where to get Tor
 
+**Русский:**
+
+Для работы **Onion Manager** вам понадобятся файлы самого Tor и подключаемых транспортов (pluggable transports). Скачать официальный **Tor Expert Bundle** можно по ссылке:
+
+👉 [https://www.torproject.org/download/tor/](https://www.torproject.org/download/tor/)
+
+На этой странице выберите версию для вашей операционной системы (например, `Windows (x86_64)`). Это не браузер, а набор файлов (`tor.exe`, `lyrebird.exe`, `conjure-client.exe` и другие), которые программа использует для работы.
+
+> **Важно:** Ссылка приведена исключительно для обеспечения технической совместимости программы. Данный проект создан независимо от анонимного программного обеспечения Tor® и не дает никаких гарантий от The Tor Project в отношении качества, пригодности или чего-либо еще.
+
+**English:**
+
+To run **Onion Manager**, you need the core Tor and pluggable transport files. You can download the official **Tor Expert Bundle** here:
+
+👉 [https://www.torproject.org/download/tor/](https://www.torproject.org/download/tor/)
+
+On this page, choose the version for your operating system (e.g., `Windows (x86_64)`). This is not a browser, but a set of files (`tor.exe`, `lyrebird.exe`, `conjure-client.exe`, and others) that the application uses to function.
+
+> **Note:** This link is provided solely for technical compatibility purposes. This project is created independently from the Tor® anonymity software and carries no guarantee from The Tor Project regarding quality, suitability, or anything else.
 ## 📦 Загрузка готовой версии / Download built release
 
 **Русский:**  
