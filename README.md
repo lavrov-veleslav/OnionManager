@@ -16,6 +16,8 @@ Unofficial GUI manager for Tor Expert Bundle on Windows. A third-party tool to s
 - 📊 Мониторинг логов с разделением на информационные, предупреждения и ошибки
 - 🔧 Автоматическая генерация и исправление конфигурационного файла `torrc`
 - 🧩 Поддержка плагинов lyrebird и conjure
+- Переключение языка:
+Кнопка выбора языка 🌐 находится в заголовке окна (справа от названия программы, слева от кнопок управления). Нажмите на неё и выберите нужный язык – интерфейс переключится мгновенно без перезапуска.
 
 **English:**
 - 🚀 Start, stop, and restart Tor with one button
@@ -23,6 +25,8 @@ Unofficial GUI manager for Tor Expert Bundle on Windows. A third-party tool to s
 - 📊 Log monitoring with separate sections for info, warnings, and errors
 - 🔧 Automatic generation and fixing of `torrc` configuration file
 - 🧩 Support for lyrebird and conjure pluggable transports
+- Switching languages:
+The language selection button 🌐 is located in the window title bar (to the right of the program name, to the left of the control buttons). Click it and select the desired language – the interface switches instantly without restart.
 
 ---
 
