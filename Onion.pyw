@@ -7,6 +7,7 @@ import threading
 import time
 import re
 import warnings
+import json
 from datetime import datetime
 from collections import deque
 
@@ -15,7 +16,7 @@ warnings.filterwarnings("ignore", message="Cannot queue arguments of type 'QText
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QPushButton, QTextEdit, QLabel, 
                              QGroupBox, QTabWidget, QPlainTextEdit, QFrame,
-                             QSizePolicy)
+                             QSizePolicy, QMenu)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject, QTimer
 from PyQt5.QtGui import QFont, QIcon
 
@@ -31,7 +32,42 @@ BRIDGE_FILE = os.path.join(BASE_DIR, "data", "bridge")
 LYREBIRD_EXE = os.path.join(BASE_DIR, "tor", "pluggable_transports", "lyrebird.exe")
 CONJURE_EXE = os.path.join(BASE_DIR, "tor", "pluggable_transports", "conjure-client.exe")
 ICON_PATH = os.path.join(BASE_DIR, "icon.ico")
+LANG_FILE = os.path.join(BASE_DIR, "lang.json")
 # ============================================================
+
+class LanguageManager:
+    _instance = None
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._load_languages()
+        return cls._instance
+    
+    def _load_languages(self):
+        self.strings = {}
+        self.current_lang = "ru"
+        try:
+            with open(LANG_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                self.strings = data
+        except Exception as e:
+            print(f"Error loading lang.json: {e}")
+            # Fallback hardcoded
+            self.strings = {
+                "ru": {"window_title": "Onion Manager", "title_label": "Onion Control Panel", "start_btn": "▶ Запустить"},
+                "en": {"window_title": "Onion Manager", "title_label": "Onion Control Panel", "start_btn": "▶ Start"}
+            }
+    
+    def tr(self, key):
+        return self.strings.get(self.current_lang, {}).get(key, self.strings.get("en", {}).get(key, key))
+    
+    def set_language(self, lang):
+        if lang in self.strings:
+            self.current_lang = lang
+            return True
+        return False
+
+lang_mgr = LanguageManager()
 
 class TitleBar(QWidget):
     def __init__(self, parent):
@@ -49,11 +85,21 @@ class TitleBar(QWidget):
             self.icon_label.setPixmap(QIcon(ICON_PATH).pixmap(20, 20))
         layout.addWidget(self.icon_label)
         
-        self.title_label = QLabel("Onion Manager")
+        self.title_label = QLabel(lang_mgr.tr("window_title"))
         self.title_label.setStyleSheet("color: white; font-size: 14px; font-weight: bold;")
         layout.addWidget(self.title_label)
         
         layout.addStretch()
+        
+        # Кнопка выбора языка
+        self.lang_btn = QPushButton("🌐")
+        self.lang_btn.setFixedSize(32, 32)
+        self.lang_btn.setStyleSheet("background-color: #5a5a5a; color: white; font-size: 16px; border-radius: 4px;")
+        self.lang_menu = QMenu()
+        self.lang_menu.addAction(lang_mgr.tr("russian"), lambda: self.parent.change_language("ru"))
+        self.lang_menu.addAction(lang_mgr.tr("english"), lambda: self.parent.change_language("en"))
+        self.lang_btn.setMenu(self.lang_menu)
+        layout.addWidget(self.lang_btn)
         
         btn_style = """
             QPushButton {
@@ -80,6 +126,7 @@ class TitleBar(QWidget):
         self.close_btn.setStyleSheet(btn_style + " color: #ff5555; font-size: 20px;")
         self.close_btn.clicked.connect(self.parent.close)
         
+        layout.addWidget(self.lang_btn)
         layout.addWidget(self.min_btn)
         layout.addWidget(self.max_btn)
         layout.addWidget(self.close_btn)
@@ -109,7 +156,7 @@ class TitleBar(QWidget):
     
     def mouseReleaseEvent(self, event):
         self.drag_pos = None
-        event.accept()       
+        event.accept()
         
 class ToastNotification(QFrame):
     _queue = deque()
@@ -215,7 +262,7 @@ class TorWorker(QObject):
         
     def start_tor(self):
         if not os.path.exists(TOR_EXE):
-            self.status_signal.emit(f"ОШИБКА: Tor не найден - {TOR_EXE}")
+            self.status_signal.emit(lang_mgr.tr("error_tor_not_found") + TOR_EXE)
             return False
         
         try:
@@ -229,7 +276,7 @@ class TorWorker(QObject):
             )
             
             self.running = True
-            self.status_signal.emit(f"✅ Tor запущен (PID: {self.process.pid})")
+            self.status_signal.emit(lang_mgr.tr("tor_started") + str(self.process.pid) + ")")
             threading.Thread(target=self.read_logs, daemon=True).start()
             return True
             
@@ -258,17 +305,17 @@ class TorWorker(QObject):
             try:
                 self.process.terminate()
                 self.process.wait(timeout=3)
-                self.status_signal.emit("🛑 Tor остановлен")
+                self.status_signal.emit(lang_mgr.tr("tor_stopped"))
             except:
                 try:
                     self.process.kill()
-                    self.status_signal.emit("💀 Tor остановлен")
+                    self.status_signal.emit(lang_mgr.tr("tor_killed"))
                 except:
                     pass
             self.process = None
     
     def restart_tor(self):
-        self.status_signal.emit("🔄 Перезапуск...")
+        self.status_signal.emit(lang_mgr.tr("restart"))
         self.stop_tor()
         time.sleep(2)
         return self.start_tor()
@@ -300,6 +347,34 @@ class MainWindow(QMainWindow):
         self.load_bridge_config()
         
         QTimer.singleShot(1000, self.start_tor)
+    
+    def change_language(self, lang):
+        if lang_mgr.set_language(lang):
+            self.refresh_ui_texts()
+    
+    def refresh_ui_texts(self):
+        self.setWindowTitle(lang_mgr.tr("window_title"))
+        self.title_bar.title_label.setText(lang_mgr.tr("window_title"))
+        self.title_bar.lang_btn.setMenu(None)
+        self.title_bar.lang_menu = QMenu()
+        self.title_bar.lang_menu.addAction(lang_mgr.tr("russian"), lambda: self.change_language("ru"))
+        self.title_bar.lang_menu.addAction(lang_mgr.tr("english"), lambda: self.change_language("en"))
+        self.title_bar.lang_btn.setMenu(self.title_bar.lang_menu)
+        
+        self.title_label.setText(lang_mgr.tr("title_label"))
+        self.start_btn.setText(lang_mgr.tr("start_btn"))
+        self.stop_btn.setText(lang_mgr.tr("stop_btn"))
+        self.restart_btn.setText(lang_mgr.tr("restart_btn"))
+        self.status_label.setText(lang_mgr.tr("status_label"))
+        self.tabs.setTabText(0, lang_mgr.tr("tab_logs"))
+        self.tabs.setTabText(1, lang_mgr.tr("tab_warnings"))
+        self.tabs.setTabText(2, lang_mgr.tr("tab_errors"))
+        self.tabs.setTabText(3, lang_mgr.tr("tab_bridges"))
+        self.save_bridge_btn.setText(lang_mgr.tr("save_bridge_btn"))
+        self.load_bridge_btn.setText(lang_mgr.tr("load_bridge_btn"))
+        self.clear_btn.setText(lang_mgr.tr("clear_logs_btn"))
+        self.info_panel.setTitle(lang_mgr.tr("info_panel"))
+        self.update_system_info()
     
     def init_ui(self):
         self.setGeometry(100, 100, 950, 700)
@@ -396,23 +471,19 @@ class MainWindow(QMainWindow):
         content_layout = QVBoxLayout()
         content_layout.setContentsMargins(10, 10, 10, 10)
         
-        # Горизонтальный layout для заголовка с иконками по бокам
         title_layout = QHBoxLayout()
         title_layout.setAlignment(Qt.AlignCenter)
-        title_layout.setSpacing(15)  # промежуток между иконками и текстом
+        title_layout.setSpacing(15)
         
-        # Левая иконка
         left_icon = QLabel()
         if os.path.exists(ICON_PATH):
             left_icon.setPixmap(QIcon(ICON_PATH).pixmap(32, 32))
         title_layout.addWidget(left_icon)
         
-        # Текст заголовка
-        title = QLabel("Onion Control Panel")
-        title.setStyleSheet("font-size: 22px; font-weight: bold; color: #4ec9b0; background-color: transparent;")
-        title_layout.addWidget(title)
+        self.title_label = QLabel(lang_mgr.tr("title_label"))
+        self.title_label.setStyleSheet("font-size: 22px; font-weight: bold; color: #4ec9b0; background-color: transparent;")
+        title_layout.addWidget(self.title_label)
         
-        # Правая иконка
         right_icon = QLabel()
         if os.path.exists(ICON_PATH):
             right_icon.setPixmap(QIcon(ICON_PATH).pixmap(32, 32))
@@ -420,15 +491,16 @@ class MainWindow(QMainWindow):
         
         content_layout.addLayout(title_layout)
         
-        btn_group = QGroupBox("Управление")
+        btn_group = QGroupBox(lang_mgr.tr("control"))
+        btn_group.setTitle(lang_mgr.tr("control"))
         btn_layout = QHBoxLayout()
-        self.start_btn = QPushButton("▶ Запустить")
+        self.start_btn = QPushButton(lang_mgr.tr("start_btn"))
         self.start_btn.clicked.connect(self.start_tor)
-        self.stop_btn = QPushButton("⏹ Остановить")
+        self.stop_btn = QPushButton(lang_mgr.tr("stop_btn"))
         self.stop_btn.setObjectName("stop")
         self.stop_btn.clicked.connect(self.stop_tor)
         self.stop_btn.setEnabled(False)
-        self.restart_btn = QPushButton("🔄 Перезапустить")
+        self.restart_btn = QPushButton(lang_mgr.tr("restart_btn"))
         self.restart_btn.setObjectName("restart")
         self.restart_btn.clicked.connect(self.restart_tor)
         self.restart_btn.setEnabled(False)
@@ -439,15 +511,15 @@ class MainWindow(QMainWindow):
         btn_group.setLayout(btn_layout)
         content_layout.addWidget(btn_group)
         
-        status_group = QGroupBox("Статус")
+        status_group = QGroupBox(lang_mgr.tr("status"))
         status_layout = QVBoxLayout()
-        self.status_label = QLabel("⚙️ Tor не запущен")
+        self.status_label = QLabel(lang_mgr.tr("status_label"))
         self.status_label.setStyleSheet("background-color: #2d2d30; padding: 8px; border-radius: 5px;")
         status_layout.addWidget(self.status_label)
         status_group.setLayout(status_layout)
         content_layout.addWidget(status_group)
         
-        tabs = QTabWidget()
+        self.tabs = QTabWidget()
         
         log_widget = QWidget()
         log_layout = QVBoxLayout()
@@ -455,7 +527,7 @@ class MainWindow(QMainWindow):
         self.log_text.setReadOnly(True)
         log_layout.addWidget(self.log_text)
         log_widget.setLayout(log_layout)
-        tabs.addTab(log_widget, "📋 Логи")
+        self.tabs.addTab(log_widget, lang_mgr.tr("tab_logs"))
         
         warn_widget = QWidget()
         warn_layout = QVBoxLayout()
@@ -463,7 +535,7 @@ class MainWindow(QMainWindow):
         self.warn_text.setReadOnly(True)
         warn_layout.addWidget(self.warn_text)
         warn_widget.setLayout(warn_layout)
-        tabs.addTab(warn_widget, "⚠️ Предупреждения")
+        self.tabs.addTab(warn_widget, lang_mgr.tr("tab_warnings"))
         
         error_widget = QWidget()
         error_layout = QVBoxLayout()
@@ -471,32 +543,32 @@ class MainWindow(QMainWindow):
         self.error_text.setReadOnly(True)
         error_layout.addWidget(self.error_text)
         error_widget.setLayout(error_layout)
-        tabs.addTab(error_widget, "❌ Ошибки")
+        self.tabs.addTab(error_widget, lang_mgr.tr("tab_errors"))
         
         bridge_widget = QWidget()
         bridge_layout = QVBoxLayout()
         self.bridge_edit = QPlainTextEdit()
         bridge_layout.addWidget(self.bridge_edit)
         bridge_btn_layout = QHBoxLayout()
-        save_bridge_btn = QPushButton("💾 Сохранить")
-        save_bridge_btn.setObjectName("save")
-        save_bridge_btn.clicked.connect(self.save_bridge_config)
-        load_bridge_btn = QPushButton("🔄 Загрузить")
-        load_bridge_btn.clicked.connect(self.load_bridge_config)
-        bridge_btn_layout.addWidget(save_bridge_btn)
-        bridge_btn_layout.addWidget(load_bridge_btn)
+        self.save_bridge_btn = QPushButton(lang_mgr.tr("save_bridge_btn"))
+        self.save_bridge_btn.setObjectName("save")
+        self.save_bridge_btn.clicked.connect(self.save_bridge_config)
+        self.load_bridge_btn = QPushButton(lang_mgr.tr("load_bridge_btn"))
+        self.load_bridge_btn.clicked.connect(self.load_bridge_config)
+        bridge_btn_layout.addWidget(self.save_bridge_btn)
+        bridge_btn_layout.addWidget(self.load_bridge_btn)
         bridge_btn_layout.addStretch()
         bridge_layout.addLayout(bridge_btn_layout)
         bridge_widget.setLayout(bridge_layout)
-        tabs.addTab(bridge_widget, "🌉 Мосты")
+        self.tabs.addTab(bridge_widget, lang_mgr.tr("tab_bridges"))
         
-        content_layout.addWidget(tabs)
+        content_layout.addWidget(self.tabs)
         
-        clear_btn = QPushButton("🗑 Очистить логи")
-        clear_btn.clicked.connect(self.clear_logs)
-        content_layout.addWidget(clear_btn)
+        self.clear_btn = QPushButton(lang_mgr.tr("clear_logs_btn"))
+        self.clear_btn.clicked.connect(self.clear_logs)
+        content_layout.addWidget(self.clear_btn)
         
-        info_panel = QGroupBox("Системная информация")
+        self.info_panel = QGroupBox(lang_mgr.tr("info_panel"))
         info_layout = QHBoxLayout()
         self.paths_text = QTextEdit()
         self.paths_text.setReadOnly(True)
@@ -506,17 +578,16 @@ class MainWindow(QMainWindow):
         self.ports_text.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         info_layout.addWidget(self.paths_text, 1)
         info_layout.addWidget(self.ports_text, 1)
-        info_panel.setLayout(info_layout)
-        content_layout.addWidget(info_panel)
+        self.info_panel.setLayout(info_layout)
+        content_layout.addWidget(self.info_panel)
         
         content.setLayout(content_layout)
         main_layout.addWidget(content)
         central.setLayout(main_layout)
         self.setCentralWidget(central)
         
-        self.add_log("Onion Manager запущен", "info")
-        self.add_log(f"📁 Базовая директория: {BASE_DIR}", "info")
-        self.add_log("🔄 Автоматический запуск через 1 секунду...", "info")
+        self.add_log(lang_mgr.tr("base_dir") + f" {BASE_DIR}", "info")
+        self.add_log(lang_mgr.tr("auto_start"), "info")
     
     def adjust_text_height(self, text_edit):
         doc_height = text_edit.document().size().height()
@@ -527,16 +598,16 @@ class MainWindow(QMainWindow):
     
     def get_paths_info(self):
         paths = [
-            f"Tor executable: {TOR_EXE}",
-            f"Tor config: {TORRC}",
-            f"Bridges file: {BRIDGE_FILE}",
-            f"Lyrebird: {LYREBIRD_EXE}",
-            f"Conjure: {CONJURE_EXE}",
+            f"{lang_mgr.tr('tor_exe')} {TOR_EXE}",
+            f"{lang_mgr.tr('tor_config')} {TORRC}",
+            f"{lang_mgr.tr('bridges_file')} {BRIDGE_FILE}",
+            f"{lang_mgr.tr('lyrebird')} {LYREBIRD_EXE}",
+            f"{lang_mgr.tr('conjure')} {CONJURE_EXE}",
         ]
         for i, p in enumerate(paths):
-            file_path = p.split(': ', 1)[1]
+            file_path = p.split(': ', 1)[1] if ': ' in p else p.split(' ', 1)[1]
             if not os.path.exists(file_path):
-                paths[i] += " (не найден)"
+                paths[i] += " " + lang_mgr.tr("not_found")
         return "\n".join(paths)
     
     def check_and_fix_all_paths(self):
@@ -552,8 +623,8 @@ class MainWindow(QMainWindow):
             missing.append(CONJURE_EXE)
         
         if missing:
-            self.add_log(f"⚠️ Внимание: отсутствуют: {', '.join(missing)}", "warn")
-            self.show_toast("Отсутствуют файлы Tor или pluggable transports", is_error=True)
+            self.add_log(f"{lang_mgr.tr('missing_files')} {', '.join(missing)}", "warn")
+            self.show_toast(lang_mgr.tr("missing_transports"), is_error=True)
         
         self.fix_paths_in_torrc()
     
@@ -572,19 +643,16 @@ class MainWindow(QMainWindow):
             geoip6_path = os.path.join(BASE_DIR, "data", "geoip6")
             
             for line in lines:
-                # GeoIPFile
                 if re.match(r'^\s*GeoIPFile\s', line, re.IGNORECASE):
                     new_line = f"GeoIPFile {geoip_path}\n"
                     if new_line != line:
                         modified = True
                     new_lines.append(new_line)
-                # GeoIPv6File
                 elif re.match(r'^\s*GeoIPv6File\s', line, re.IGNORECASE):
                     new_line = f"GeoIPv6File {geoip6_path}\n"
                     if new_line != line:
                         modified = True
                     new_lines.append(new_line)
-                # lyrebird
                 elif 'lyrebird' in line.lower() and '.exe' in line.lower():
                     exec_idx = line.lower().find('exec')
                     if exec_idx != -1:
@@ -597,7 +665,6 @@ class MainWindow(QMainWindow):
                         new_lines.append(new_line)
                     else:
                         new_lines.append(line)
-                # conjure-client.exe
                 elif 'conjure-client.exe' in line.lower():
                     exec_idx = line.lower().find('exec')
                     if exec_idx != -1:
@@ -610,17 +677,14 @@ class MainWindow(QMainWindow):
                         new_lines.append(new_line)
                     else:
                         new_lines.append(line)
-                # %include
                 elif re.match(r'^\s*%include\s', line, re.IGNORECASE):
                     new_line = f"%include {BRIDGE_FILE}\n"
                     if new_line != line:
                         modified = True
                     new_lines.append(new_line)
-                # Все остальные строки (включая пустые) – просто копируем
                 else:
                     new_lines.append(line)
             
-            # Удаляем все пустые строки (включая те, что содержат только пробелы/табуляции)
             filtered_lines = [line for line in new_lines if line.strip() != '']
             if len(filtered_lines) != len(new_lines):
                 modified = True
@@ -629,11 +693,11 @@ class MainWindow(QMainWindow):
             if modified:
                 with open(TORRC, 'w', encoding='utf-8') as f:
                     f.writelines(new_lines)
-                self.add_log("✅ Пути в torrc обновлены, пустые строки удалены", "info")
-                self.show_toast("Конфигурация torrc обновлена", is_error=False)
+                self.add_log(lang_mgr.tr("paths_updated"), "info")
+                self.show_toast(lang_mgr.tr("config_updated"), is_error=False)
         except Exception as e:
-            self.add_log(f"❌ Ошибка при исправлении torrc: {e}", "error")
-            self.show_toast(f"Ошибка: {e}", is_error=True)
+            self.add_log(f"{lang_mgr.tr('error_updating_torrc')} {e}", "error")
+            self.show_toast(f"{lang_mgr.tr('error_updating_torrc')} {e}", is_error=True)
     
     def create_default_torrc(self):
         try:
@@ -660,9 +724,9 @@ SOCKSPort 9050
             os.makedirs(os.path.dirname(TORRC), exist_ok=True)
             with open(TORRC, 'w', encoding='utf-8') as f:
                 f.write(content)
-            self.add_log("✅ Создан базовый torrc", "info")
+            self.add_log(lang_mgr.tr("default_torrc_created"), "info")
         except Exception as e:
-            self.add_log(f"❌ Ошибка создания torrc: {e}", "error")
+            self.add_log(f"{lang_mgr.tr('error_creating_torrc')} {e}", "error")
     
     def get_ports_info(self):
         info = []
@@ -687,7 +751,7 @@ SOCKSPort 9050
                         if len(parts) >= 2:
                             info.append(f"Bridges include: {parts[1]}")
             if not info:
-                info.append("Порты не найдены")
+                info.append(lang_mgr.tr("ports_not_found"))
         except Exception as e:
             info.append(f"Ошибка чтения torrc: {e}")
         return "\n".join(info)
@@ -726,12 +790,12 @@ SOCKSPort 9050
         self.stop_btn.setEnabled(True)
         self.restart_btn.setEnabled(True)
         self.is_running = True
-        self.update_status("Запуск Tor...")
+        self.update_status(lang_mgr.tr("starting"))
         threading.Thread(target=self._start_thread, daemon=True).start()
     
     def _start_thread(self):
         if self.worker.start_tor():
-            self.update_status("Tor запущен и работает")
+            self.update_status(lang_mgr.tr("tor_started").replace("✅ Tor запущен (PID: ", "").replace(")", ""))
         else:
             self.start_btn.setEnabled(True)
             self.stop_btn.setEnabled(False)
@@ -751,7 +815,7 @@ SOCKSPort 9050
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(False)
         self.restart_btn.setEnabled(False)
-        self.update_status("Перезапуск...")
+        self.update_status(lang_mgr.tr("restarting"))
         threading.Thread(target=self._restart_thread, daemon=True).start()
     
     def _restart_thread(self):
@@ -759,7 +823,7 @@ SOCKSPort 9050
             self.start_btn.setEnabled(False)
             self.stop_btn.setEnabled(True)
             self.restart_btn.setEnabled(True)
-            self.update_status("Tor перезапущен")
+            self.update_status(lang_mgr.tr("tor_started"))
         else:
             self.start_btn.setEnabled(True)
             self.stop_btn.setEnabled(False)
@@ -780,15 +844,15 @@ SOCKSPort 9050
                     else:
                         cleaned.append(line)
                 self.bridge_edit.setPlainText('\n'.join(cleaned).rstrip('\n'))
-                self.add_log("✅ Мосты загружены", "info")
-                self.show_toast("Мосты загружены", is_error=False)
+                self.add_log(lang_mgr.tr("bridges_loaded"), "info")
+                self.show_toast(lang_mgr.tr("bridges_loaded"), is_error=False)
             else:
-                self.add_log(f"⚠️ Файл мостов не найден: {self.bridge_file}", "warn")
+                self.add_log(f"{lang_mgr.tr('bridge_file_not_found')} {self.bridge_file}", "warn")
                 self.bridge_edit.setPlainText("")
-                self.show_toast("Файл мостов не найден", is_error=True)
+                self.show_toast(lang_mgr.tr("bridge_file_not_found"), is_error=True)
         except Exception as e:
-            self.add_log(f"❌ Ошибка загрузки: {e}", "error")
-            self.show_toast(f"Ошибка загрузки: {e}", is_error=True)
+            self.add_log(f"{lang_mgr.tr('error_loading_bridges')} {e}", "error")
+            self.show_toast(f"{lang_mgr.tr('error_loading_bridges')} {e}", is_error=True)
     
     def save_bridge_config(self):
         try:
@@ -804,17 +868,17 @@ SOCKSPort 9050
             os.makedirs(os.path.dirname(self.bridge_file), exist_ok=True)
             with open(self.bridge_file, 'w', encoding='utf-8') as f:
                 f.write('\n'.join(formatted))
-            self.add_log("✅ Мосты сохранены", "info")
-            self.show_toast("Мосты сохранены", is_error=False)
+            self.add_log(lang_mgr.tr("bridges_saved"), "info")
+            self.show_toast(lang_mgr.tr("bridges_saved"), is_error=False)
         except Exception as e:
-            self.add_log(f"❌ Ошибка сохранения: {e}", "error")
-            self.show_toast(f"Ошибка: {e}", is_error=True)
+            self.add_log(f"{lang_mgr.tr('error_saving_bridges')} {e}", "error")
+            self.show_toast(f"{lang_mgr.tr('error_saving_bridges')} {e}", is_error=True)
     
     def clear_logs(self):
         self.log_text.clear()
         self.warn_text.clear()
         self.error_text.clear()
-        self.add_log("Логи очищены", "info")
+        self.add_log(lang_mgr.tr("logs_cleared"), "info")
     
     def closeEvent(self, event):
         self.worker.stop_tor()
