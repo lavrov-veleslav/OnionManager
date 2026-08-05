@@ -63,8 +63,8 @@ class ToastNotification(QFrame):
             self.move(x, y)
 
     @classmethod
-    def show_toast(cls, parent, message, is_error=False):
-        toast = cls(parent, message, duration=4000, is_error=is_error)
+    def show_toast(cls, parent, message, is_error=False, duration=4000):
+        toast = cls(parent, message, duration=duration, is_error=is_error)
         cls._queue.append(toast)
         cls._process_queue()
 
@@ -75,9 +75,25 @@ class ToastNotification(QFrame):
         if not cls._queue:
             return
         cls._current_toast = cls._queue.popleft()
-        cls._current_toast.show()
-        cls._current_toast.raise_()
-        QTimer.singleShot(cls._current_toast.duration, cls._close_current)
+        try:
+            cls._current_toast.show()
+            cls._current_toast.raise_()
+            QTimer.singleShot(cls._current_toast.duration, cls._close_current)
+        except Exception:
+            # If showing fails, ensure we try the next one
+            cls._current_toast = None
+            QTimer.singleShot(0, cls._process_queue)
 
     @classmethod
-{
+    def _close_current(cls):
+        try:
+            if cls._current_toast is not None:
+                try:
+                    cls._current_toast.hide()
+                    cls._current_toast.deleteLater()
+                except Exception:
+                    pass
+                cls._current_toast = None
+        finally:
+            # proceed to next toast if any
+            QTimer.singleShot(0, cls._process_queue)
