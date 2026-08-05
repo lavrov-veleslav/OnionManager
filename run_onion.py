@@ -1,5 +1,5 @@
-# convenience runner
-from onion_manager.main import main
+# Removed
 
-if __name__ == '__main__':
-    main()
+This file was removed from the repository in favor of the single-file Onion.pyw entrypoint (Onion.pyw in the repository root).
+
+To run the application, use Onion.pyw.
