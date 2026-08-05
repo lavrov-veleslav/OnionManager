@@ -1,0 +1,1 @@
+This folder moved to legacy/ui to preserve backups of the modular UI after single-file migration.
