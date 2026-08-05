@@ -33,15 +33,23 @@ class TitleBar(QWidget):
         self.lang_btn.setFixedSize(32, 32)
         self.lang_btn.setStyleSheet("background-color: #5a5a5a; color: white; font-size: 16px; border-radius: 4px;")
         self.lang_menu = QMenu()
-        self.lang_menu.addAction(lang_mgr.tr("russian"), lambda: self.parent.change_language("ru"))
-        self.lang_menu.addAction(lang_mgr.tr("english"), lambda: self.parent.change_language("en"))
+        self.lang_menu.addAction(lang_mgr.tr("russian"), lambda: self.parent.change_language("ru") if self.parent else None)
+        self.lang_menu.addAction(lang_mgr.tr("english"), lambda: self.parent.change_language("en") if self.parent else None)
         self.lang_btn.setMenu(self.lang_menu)
         layout.addWidget(self.lang_btn)
 
         # window control buttons
         self.min_btn = QPushButton("-")
         self.min_btn.setFixedSize(40, 32)
-        self.min_btn.clicked.connect(self.parent.showMinimized)
+        if self.parent:
+            self.min_btn.clicked.connect(self.parent.showMinimized)
         layout.addWidget(self.min_btn)
 
-{
+        self.close_btn = QPushButton("x")
+        self.close_btn.setFixedSize(40, 32)
+        self.close_btn.setStyleSheet("background-color: #e81123; color: white; font-weight: bold;")
+        if self.parent:
+            self.close_btn.clicked.connect(self.parent.close)
+        layout.addWidget(self.close_btn)
+
+        self.setLayout(layout)
