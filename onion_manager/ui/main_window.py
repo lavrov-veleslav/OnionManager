@@ -39,4 +39,3 @@ class MainWindow(QMainWindow):
         self.title_label.setText(lang_mgr.tr("title_label"))
         self.start_btn.setText(lang_mgr.tr("start_btn"))
         self.stop_btn.setText(lang_mgr.tr("stop_btn"))
-{
