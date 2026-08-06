@@ -126,6 +126,7 @@ class TitleBar(QWidget):
         self.close_btn.setStyleSheet(btn_style + " color: #ff5555; font-size: 20px;")
         self.close_btn.clicked.connect(self.parent.close)
         
+        layout.addWidget(self.lang_btn)
         layout.addWidget(self.min_btn)
         layout.addWidget(self.max_btn)
         layout.addWidget(self.close_btn)
@@ -595,25 +596,137 @@ class MainWindow(QMainWindow):
         total_height = doc_height + margin * 2 + frame_width + 10
         text_edit.setFixedHeight(int(total_height))
     
-    def get_current_bridge(self):
-        # Return the first non-empty, non-comment bridge address from the bridge file
+    def get_paths_info(self):
+        paths = [
+            f"{lang_mgr.tr('tor_exe')} {TOR_EXE}",
+            f"{lang_mgr.tr('tor_config')} {TORRC}",
+            f"{lang_mgr.tr('bridges_file')} {BRIDGE_FILE}",
+            f"{lang_mgr.tr('lyrebird')} {LYREBIRD_EXE}",
+            f"{lang_mgr.tr('conjure')} {CONJURE_EXE}",
+        ]
+        for i, p in enumerate(paths):
+            file_path = p.split(': ', 1)[1] if ': ' in p else p.split(' ', 1)[1]
+            if not os.path.exists(file_path):
+                paths[i] += " " + lang_mgr.tr("not_found")
+        return "\n".join(paths)
+    
+    def check_and_fix_all_paths(self):
+        os.makedirs(os.path.dirname(TOR_EXE), exist_ok=True)
+        os.makedirs(os.path.dirname(TORRC), exist_ok=True)
+        
+        missing = []
+        if not os.path.exists(TOR_EXE):
+            missing.append(TOR_EXE)
+        if not os.path.exists(LYREBIRD_EXE):
+            missing.append(LYREBIRD_EXE)
+        if not os.path.exists(CONJURE_EXE):
+            missing.append(CONJURE_EXE)
+        
+        if missing:
+            self.add_log(f"{lang_mgr.tr('missing_files')} {', '.join(missing)}", "warn")
+            self.show_toast(lang_mgr.tr("missing_transports"), is_error=True)
+        
+        self.fix_paths_in_torrc()
+    
+    def fix_paths_in_torrc(self):
+        if not os.path.exists(TORRC):
+            self.create_default_torrc()
+            return
+        
         try:
-            if not os.path.exists(self.bridge_file):
-                return None
-            with open(self.bridge_file, 'r', encoding='utf-8') as f:
-                for raw in f:
-                    line = raw.strip()
-                    if not line or line.startswith('#'):
-                        continue
-                    # line may start with 'bridge ' or not
-                    parts = line.split()
-                    if parts[0].lower() == 'bridge' and len(parts) >= 2:
-                        return parts[1]
+            with open(TORRC, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            
+            modified = False
+            new_lines = []
+            geoip_path = os.path.join(BASE_DIR, "data", "geoip")
+            geoip6_path = os.path.join(BASE_DIR, "data", "geoip6")
+            
+            for line in lines:
+                if re.match(r'^\s*GeoIPFile\s', line, re.IGNORECASE):
+                    new_line = f"GeoIPFile {geoip_path}\n"
+                    if new_line != line:
+                        modified = True
+                    new_lines.append(new_line)
+                elif re.match(r'^\s*GeoIPv6File\s', line, re.IGNORECASE):
+                    new_line = f"GeoIPv6File {geoip6_path}\n"
+                    if new_line != line:
+                        modified = True
+                    new_lines.append(new_line)
+                elif 'lyrebird' in line.lower() and '.exe' in line.lower():
+                    exec_idx = line.lower().find('exec')
+                    if exec_idx != -1:
+                        after_exec = line[exec_idx+4:].lstrip()
+                        space_idx = after_exec.find(' ')
+                        args = after_exec[space_idx:] if space_idx != -1 else ''
+                        new_line = line[:exec_idx] + f"exec {LYREBIRD_EXE}{args}\n"
+                        if new_line != line:
+                            modified = True
+                        new_lines.append(new_line)
                     else:
-                        # If file contains raw addresses (bridge stripped), take first token
-                        return parts[0]
-        except Exception:
-            return None
+                        new_lines.append(line)
+                elif 'conjure-client.exe' in line.lower():
+                    exec_idx = line.lower().find('exec')
+                    if exec_idx != -1:
+                        after_exec = line[exec_idx+4:].lstrip()
+                        space_idx = after_exec.find(' ')
+                        args = after_exec[space_idx:] if space_idx != -1 else ''
+                        new_line = line[:exec_idx] + f"exec {CONJURE_EXE}{args}\n"
+                        if new_line != line:
+                            modified = True
+                        new_lines.append(new_line)
+                    else:
+                        new_lines.append(line)
+                elif re.match(r'^\s*%include\s', line, re.IGNORECASE):
+                    new_line = f"%include {BRIDGE_FILE}\n"
+                    if new_line != line:
+                        modified = True
+                    new_lines.append(new_line)
+                else:
+                    new_lines.append(line)
+            
+            filtered_lines = [line for line in new_lines if line.strip() != '']
+            if len(filtered_lines) != len(new_lines):
+                modified = True
+                new_lines = filtered_lines
+            
+            if modified:
+                with open(TORRC, 'w', encoding='utf-8') as f:
+                    f.writelines(new_lines)
+                self.add_log(lang_mgr.tr("paths_updated"), "info")
+                self.show_toast(lang_mgr.tr("config_updated"), is_error=False)
+        except Exception as e:
+            self.add_log(f"{lang_mgr.tr('error_updating_torrc')} {e}", "error")
+            self.show_toast(f"{lang_mgr.tr('error_updating_torrc')} {e}", is_error=True)
+    
+    def create_default_torrc(self):
+        try:
+            geoip_path = os.path.join(BASE_DIR, "data", "geoip")
+            geoip6_path = os.path.join(BASE_DIR, "data", "geoip6")
+            content = f"""# torrc generated by Onion Manager
+AvoidDiskWrites 1
+Log notice stdout
+CookieAuthentication 1
+DormantCanceledByStartup 1
+GeoIPFile {geoip_path}
+GeoIPv6File {geoip6_path}
+ClientTransportPlugin meek_lite,obfs2,obfs3,obfs4,scramblesuit,webtunnel exec {LYREBIRD_EXE}
+ClientTransportPlugin snowflake exec {LYREBIRD_EXE}
+ClientTransportPlugin conjure exec {CONJURE_EXE} -registerURL https://registration.refraction.network/api
+ExcludeNodes {{ru}}, {{by}}, {{ua}}, {{kz}}
+StrictNodes 1
+UseBridges 1
+HTTPTunnelPort 9051
+SOCKSPort 9050
+
+%include {BRIDGE_FILE}
+"""
+            os.makedirs(os.path.dirname(TORRC), exist_ok=True)
+            with open(TORRC, 'w', encoding='utf-8') as f:
+                f.write(content)
+            self.add_log(lang_mgr.tr("default_torrc_created"), "info")
+        except Exception as e:
+            self.add_log(f"{lang_mgr.tr('error_creating_torrc')} {e}", "error")
     
     def get_ports_info(self):
         info = []
@@ -641,11 +754,6 @@ class MainWindow(QMainWindow):
                 info.append(lang_mgr.tr("ports_not_found"))
         except Exception as e:
             info.append(f"Ошибка чтения torrc: {e}")
-
-        # Add currently used bridge (if any) to the lower-right info panel
-        current = self.get_current_bridge()
-        if current:
-            info.append(f"Used bridge: {current}")
         return "\n".join(info)
     
     def update_system_info(self):
